@@ -1,0 +1,10 @@
+Chapter 1: Building Abstractions with Procedures
+
+Key Points: 
+- Programming is about building complex prcoesses
+    - Limitation is the imagination
+    - Need to learn how to manage complexity
+- Abstraction: Black box, do not need to know implementation, just the input and the output
+- First-class functions: functions that can be passed around that any other data
+- tail recursion: iterative process, other languages have synatic sugar for ( e.g. for, while, etc. )
+- procedures can be used to make higher-order procedures
