@@ -1,0 +1,29 @@
+2.52:
+
+Since the painter is annoying in Dr. Racket, and I don't want to figure it out right now.
+
+Here is, in writing, how I would solve this three part question:
+Q1. Add some segments to the primitive wave painter of ex. 2.49.
+Assuming we had sufficient artistic talent (i.e. willingness to draw something and then map)
+
+Eyes:
+- Drawn as line segments
+
+Coordinate plane (0 1)
+
+Eyes:
+(define top-left-eye (make-vect 0.3 0.8))
+(define bot-left-eye (make-vect 0.3 0.6))
+
+(define top-right-eye (make-vect 0.7 0.8))
+(define bot-right-eye (make-vect 0.7 0.6))
+
+(define smile-left (make-vect 0.2 0.4))
+(define smile-center-left (make-vect 0.3 0.3))
+(define smile-center (make-vect 0.5 0.27))
+(define smile-center-right (make-vect 0.7 0.3))
+(define smile-right (make-vect 0.8 0.4))
+
+(see ex2_49.scm)
+
+(modify corner-split, can just play around)

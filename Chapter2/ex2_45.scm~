@@ -1,0 +1,13 @@
+(define right-split
+  (split beside below))
+
+(define up-split
+  (split below beside))
+
+(define (split orientation operation)
+    (define (smaller painter n)
+      (if (= x 0)
+        painter
+        (let ((tiny (smaller painter (- n 1))))
+          (orientation painter (operation tiny tiny)))))
+    smaller)
