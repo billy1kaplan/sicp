@@ -1,0 +1,9 @@
+#lang sicp
+
+(define (adjoin-set x set)
+  (cond ((null? set) (list x))
+        ((eq? (car set)) set)
+        ((> x (car set)) (append x set))
+        (else (append (car set) (adjoin-set x (cdr set))))))
+
+(adjoin-set 1 (list 2 3 4 5))
