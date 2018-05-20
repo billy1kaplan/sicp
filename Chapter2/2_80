@@ -1,0 +1,17 @@
+#lang racket
+
+;; top level
+(define (=zero? x)
+  (apply-generic `=zero? x))
+
+;; ordinary numbers
+(put `=zero? `(scheme-number)
+     (lambda (x) (= x 0)))
+
+;; rational numbers
+(put `=zero? `(rational)
+     (lambda (x) (= (numer x) 0)))
+
+;; complex numbers
+(put `=zero? `(complex)
+     (lambda (x) (= (magnitude x) 0)))

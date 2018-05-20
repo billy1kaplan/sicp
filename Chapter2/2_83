@@ -1,0 +1,19 @@
+#lang racket
+
+;; in scheme package
+(define (raise i)
+  (make-rational i 1)
+  
+  (put `raise `(integer) raise))
+
+;; in rational package
+(define (raise r)
+  (make-real (/ (numer r) (denom r)))
+
+  (put `raise `(rational) raise))
+
+;; in real package
+(define (raise r)
+  (make-from-real-imag r 0)
+
+  (put `raise `(real) raise))

@@ -1,0 +1,104 @@
+#lang racket
+
+(define (delay a)
+  (lambda () a))
+
+(define (force a)
+  (a))
+
+(define (car-stream s)
+  (car s))
+
+(define (cdr-stream s)
+  (force (cdr s)))
+
+(define (cons-stream a b)
+  (cons a (delay b)))
+
+(define the-empty-stream
+  null)
+
+(define (stream-null? s)
+  (null? s))
+
+(define (stream-car stream) (car stream))
+
+(define (stream-cdr stream) (force (cdr stream)))
+
+(define (stream-map proc . argstreams)
+  (if (stream-null? (car argstreams))
+      the-empty-stream
+      (cons-stream
+       (apply proc (map car-stream argstreams))
+       (apply stream-map
+              (cons proc (map cdr-stream argstreams))))))
+
+;; 51
+
+(define (show x)
+  (display-line x)
+  x)
+
+(define (display-line x)
+  (display x)
+  (newline))
+
+(define (stream-enumerate-interval start end)
+  (if (= start end)
+      the-empty-stream
+      (cons-stream start
+                   (stream-enumerate-interval (+ start 1) end))))
+
+(define x (stream-map show (stream-enumerate-interval 0 10)))
+
+;; 52
+;; Sum:
+;; 0
+;; 0
+;; 1
+;; 1
+;; 1
+;; 13
+;; 58
+
+
+;; stream-ref
+;; 0
+;; 1
+;; 2
+;; 3
+;; 4
+;; 5
+;; 6
+;; 7
+
+;; 8
+;; 9
+;; 10...
+
+(define (mul-streams s1 s2)
+  (stream-map * s1 s2))
+
+(define (add-stream s1 s2)
+  (stream-map + s1 s2))
+
+(define (ones) (cons-stream 1 (ones)))
+
+(define (integers) (cons-stream 1 (add-stream ones integers)))
+
+(define (factorials) (cons-stream 1 (mul-streams (cdr-stream (integers))
+                                                 (factorials))))
+(define f factorials)
+
+(define (take n s)
+  (if (= n 0)
+      'done
+      (begin (display-line (car-stream s))
+             (take (- n 1) (cdr-stream s)))))
+
+(define (partial-sums s)
+  (cons-stream (car-stream s)
+               (add-stream (cdr-stream s)
+                           partial-sums)))
+
+(define test (lambda () (cons 1 test)))

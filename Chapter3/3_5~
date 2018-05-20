@@ -1,0 +1,21 @@
+#lang racket
+
+(define (monte-carlo trials experiment)
+  (define (iter trials-remaining trials-passed)
+    (cond [(= trials-remaining 0) (/ trials-passed trials)]
+          [(experiment) (iter (- trials-remaining 1) (+ trials-passed 1))]
+          [#t (iter (- trials-remaining 1) trials-passed)]))
+  (iter trials 0))
+
+(define (estimate-integral P? x1 x2 y1 y2 n)
+  (define (random-in-range low high)
+    (let ((range (- high low)))
+      (+ low (* range (/ (random 100000) 100000)))))
+  (define (experiment)
+    (P? (random-in-range x1 x2)
+        (random-in-range y1 y2)))
+  (* (monte-carlo n experiment) (- x2 x1) (- y2 y1)))
+
+(define (circle-pred r)
+  (lambda (x y)
+    (not (> (+ (* x x) (* y y)) (* r r)))))

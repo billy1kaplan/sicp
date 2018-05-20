@@ -1,0 +1,28 @@
+#lang racket
+(define (type-tag arg)
+  (car arg))
+
+(define (apply-generic op . args)
+  (let* [(type-tags (map type-tag args))
+         (proc (get op type-tags))]
+    (if proc
+        (apply proc (map contents args))
+        (let [coerce-tags
+              (lambda (tag)
+                (map (lambda (cur)
+                       (if (eq? cur tag)
+                           tag
+                           (get-coercion cur tag))) type-tags))
+              check-tags (lambda (ts)
+                           (andmap (lambda (x) x) ts))]
+          (define (try-to-coerce tags)
+            (if (null? tags)
+                (error "No method for these types" (list op type-tags))
+                (let (coerced (coerce-tags (hd tags)))
+                  (if (check-tags coerced)
+                      (apply-generic op coerced)
+                      (try-to-coerce (tl tags))))))))))
+
+;; This strategy fails when we need to coerce to a type higher-up in the hierarchy. For
+;; instance, we may need to coerce integer up to complex-number but this search stops at
+;; a depth of 1

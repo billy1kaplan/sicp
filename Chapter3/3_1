@@ -1,0 +1,6 @@
+#lang racket
+
+(define (make-accumulator init)
+  (lambda (x)
+    (begin (set! init (+ x init))
+           init)))

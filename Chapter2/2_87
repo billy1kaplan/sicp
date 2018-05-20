@@ -1,0 +1,27 @@
+#lang racket
+
+(define (project z) (apply-generic `drop z))
+
+;; in complex
+(define (drop z)
+  (make-real (real-part z))
+  
+  (put `drop `(complex) drop))
+
+;; in real
+(define (drop z)
+  (make-rat (* 1000 z) (1000))
+
+  (put `drop `(real) drop))
+
+;; in rational
+(define (drop z)
+  (make-int (round (/ (numer z) (denom z))))
+
+  (put `drop `(rational) drop))
+
+(define (simplify z)
+  (let [(simplified (project z))]
+    (if (and simplified (equ? (raise simplified) z))
+        (simplify simplified)
+        z)))

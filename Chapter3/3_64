@@ -1,0 +1,199 @@
+#lang racket
+(define the-empty-stream null)
+
+(define (stream-null? s)
+  (null? s))
+
+(define-syntax delay
+  (syntax-rules ()
+    ((_ exp) (lambda () exp))))
+
+(define-syntax cons-stream
+  (syntax-rules ()
+    ((_ a b) (cons a (delay b)))))
+
+(define (force f)
+  (f))
+
+(define (car-stream s)
+  (car s))
+
+(define (cdr-stream s)
+  (force (cdr s)))
+
+(define (display-line x)
+  (newline)
+  (display x))
+
+(define (print n s)
+  (if (= n 0)
+      (display-line 'done)
+      (begin (display-line (car-stream s))
+             (print (- n 1) (cdr-stream s)))))
+
+(define (stream-map proc . argstreams)
+  (if (stream-null? (car argstreams))
+      the-empty-stream
+      (cons-stream
+       (apply proc (map car-stream argstreams))
+       (apply stream-map
+              (cons proc (map cdr-stream argstreams))))))
+
+(define (add-streams s1 s2)
+  (stream-map + s1 s2))
+
+(define (ones) (cons-stream 1 (ones)))
+
+(define (integers-starting-from n)
+  (cons-stream n (integers-starting-from (+ n 1))))
+(define integers (integers-starting-from 1))
+
+(define (partial-sums s)
+  (cons-stream (car-stream s)
+               (add-streams (cdr-stream s)
+                            (partial-sums s))))
+(define p (partial-sums (ones)))
+
+(define (scale-stream s n)
+  (stream-map (lambda (x) (* n x)) s))
+
+(define (merge s1 s2)
+  (cond [(stream-null? s1) s2]
+        [(stream-null? s2) s1]
+        [#t
+         (let ([s1car (car-stream s1)]
+               [s2car (car-stream s2)])
+           (cond [(< s1car s2car)
+                  (cons-stream s1car (merge (cdr-stream s1) s2))]
+                 [(> s1car s2car)
+                  (cons-stream s2car (merge s1 (cdr-stream s2)))]
+                 [#t
+                  (cons-stream s1car
+                               (merge (cdr-stream s1)
+                                      (cdr-stream s2)))]))]))
+
+(define (scaled n)
+  (scale-stream integers n))
+(define S (cons-stream 1 (merge (merge (scaled 2) (scaled 3)) (scaled 5))))
+(define S1 (cons-stream 1 (merge (merge (scale-stream S1 2) (scale-stream S1 3)) (scale-stream S1 5))))
+(define fib (cons-stream 0
+                         (cons-stream 1
+                                      (add-streams (cdr-stream fib)
+                                                   fib))))
+(define (div-streams s1 s2)
+  (stream-map / s1 s2))
+
+(define (mul-streams s1 s2)
+  (stream-map * s1 s2))
+
+(define (integrate-series s)
+  (div-streams s integers))
+
+(define cosine-series
+  (cons-stream 1 (integrate-series (scale-stream sine-series -1))))
+
+(define sine-series
+  (cons-stream 0 (integrate-series cosine-series)))
+
+(define (take n s)
+  (if (= n 0)
+      the-empty-stream
+      (cons-stream (car-stream s)
+                   (take (- n 1) (cdr-stream s)))))
+
+(define (sum-multiple s1 s2)
+  (partial-sums (mul-streams s1 s2)))
+
+;(define (mul-series s1 s2)
+;  (cons-stream (* (car-stream s1) (car-stream s2))
+;               (cons-stream (+ (* (car-stream s1) (car-stream (cdr-stream s2)))
+;                               (* (car-stream s2) (car-stream (cdr-stream s1))))
+;                            (cons-stream (+ (* (car-stream s1) (car-stream (cdr-stream (cdr-stream s2))))
+;                                            (* (car-stream s2) (car-stream (cdr-stream (cdr-stream s1))))
+;                                            (* (car-stream (cdr-stream s1)) (car-stream (cdr-stream s2))))
+;                                         null))))
+
+(define (mul-series s1 s2)
+  (cons-stream (* (car-stream s1) (car-stream s2))
+               (add-streams (add-streams (scale-stream (cdr-stream s1) (car-stream s2))
+                                         (scale-stream (cdr-stream s2) (car-stream s1)))
+                            (cons-stream 0 (mul-series (cdr-stream s1) (cdr-stream s2))))))
+
+(define (mul-series1 s1 s2)
+  (cons-stream (* (car-stream s1) (car-stream s2))
+               (add-streams (scale-stream (cdr-stream s2) (car-stream s1))
+                            (mul-series1 (cdr-stream s1) s2))))
+                            
+(define (c s1 s2)
+  (cons-stream (add-streams (scale-stream (cdr-stream s1) (car-stream s2))
+                            (scale-stream (cdr-stream s2) (car-stream s1)))
+               (cons-stream (add-streams (scale-stream (cdr-stream s1) (car-stream s2))
+                                         (scale-stream (cdr-stream s2) (car-stream s1)))
+                            null)))
+
+                                          
+;                            (add-streams (scale-stream (cdr-stream s1) (car-stream s2))
+;                                         (mul-series (cdr-stream s1) (cdr-stream s2))))))
+
+(define T (mul-series integers integers))
+;(print 10 T)
+(define T1 (mul-series integers integers))
+;(print 10 T1)
+;(define (mul-series s1 s2)
+;  (cons-stream (* (car-stream s1) (car-stream s2))
+;               (add-streams ?? ??)))
+
+
+(define s1 (mul-series cosine-series cosine-series))
+(define s2 (mul-series sine-series sine-series))
+(define s3 (add-streams s1 s2))
+;(print 10 s3)
+
+;; 3.61
+(define (invert-unit-series S)
+  (define inverted
+    (cons-stream 1
+                 (scale-stream (mul-series (cdr-stream S) inverted) -1)))
+  inverted)
+
+(define (w S)
+  (define invert-unit-series
+    (cons-stream 1
+                 (scale-stream (mul-series (cdr-stream S) invert-unit-series) -1)))
+  invert-unit-series)
+
+(define inverted (invert-unit-series integers))
+(define test (mul-series integers inverted))
+(define inverted2 (w integers))
+;(print 5 inverted)
+;(print 5 inverted2)
+
+;; 3.62
+(define (div-series S1 S2)
+  (if (= (car-stream S2) 0)
+      (error "Attempting to divide by 0")
+      (mul-series S1 (invert-unit-series S2))))
+
+;(print 20 (div-series sine-series cosine-series))
+
+;; 3.63
+(define (stream-limit S e)
+  (if (< (abs (- (car-stream S) (car-stream (cdr-stream S)))) e)
+      (car-stream S)
+      (stream-limit (cdr-stream S) e)))
+
+(define (average x y)
+  (/ (+ x y) 2))
+(define (sqrt-improve guess x)
+  (average guess (/ x guess)))
+
+(define (sqrt-stream x)
+  (define guesses
+    (cons-stream 1.0
+                 (stream-map (lambda (guess)
+                               (sqrt-improve guess x)) guesses)))
+  guesses)
+(define (sqrt x tolerance)
+  (stream-limit (sqrt-stream x) tolerance))
+
+(sqrt 2 0.01)

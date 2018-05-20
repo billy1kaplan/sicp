@@ -1,0 +1,9 @@
+a. apply-generic will keep trying to coerce the types, leading to infinite recursion
+
+b. even if arguments have the same type, they may still need to be coerced to a supertype to apply the operation.
+
+c. add a check to the if (and (= (length args) 2)
+                              (not (eq? (car type-tags)
+                                   (cadr type-tags))))
+
+So that this will fail instead of trying to apply coercion

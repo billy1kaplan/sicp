@@ -1,0 +1,17 @@
+#lang racket
+
+(define (make-account balance pass)
+  (define (withdraw amount)
+    (if (>= balance amount)
+        (begin (set! balance (- balance amount))
+               balance)
+        "Insufficient funds"))
+  (define (deposit amount)
+    (begin (set! balance (+ balance amount))
+           balance))
+  (define (dispatch pw m)
+    (cond [(not (eq? pw pass)) (error "Incorrect Password")]
+          [(eq? m 'withdraw) withdraw]
+          [(eq? m 'deposit) deposit]
+          [#t (error "Unknown Operation")]))
+  dispatch)

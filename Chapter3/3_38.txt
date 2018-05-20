@@ -1,0 +1,33 @@
+a. initial balance: $100
+
+Outcomes:
+Peter -> Paul -> Mary
+$110  -> $90  -> $45
+
+Peter -> Mary -> Paul
+$110  -> $55  -> $35
+
+Paul -> Peter -> Mary
+$80  -> $90  -> $45
+
+Paul -> Mary -> Peter
+$80  -> $40  -> $50
+
+Mary -> Paul -> Peter
+$50  -> $30  -> $40
+
+Mary -> Peter -> Paul
+$50  -> $60  -> $40
+
+b. :Interleaving
+
+Mary and Paul both read $100.
+
+Paul's withdrawal goes first and then Mary withdraw's half:
+
+$50 -> $60
+
+All read the same initial value:
+$110 as Peter's deposit overwrites the rest yet mary has $50 and Paul has $20
+
+

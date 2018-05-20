@@ -1,0 +1,13 @@
+#lang racket
+
+;; a
+(define my-table (make-hash))
+(define (put op type value) (hash-set! my-table (list op type) value))
+(define (get op type) (begin (hash-ref my-table (list op type) #f)))
+
+(define (install-division-1)
+  (define (get-record employee-id)
+    (...))
+
+  (put `get-record `division-1 get-record))
+

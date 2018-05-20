@@ -1,0 +1,8 @@
+#lang racket
+
+(define f
+  (let ((c 2))
+    (lambda (n)
+      (set! c (- c 1))
+      (* n c))))
+          

@@ -1,0 +1,51 @@
+#lang racket
+(define (make-table)
+  (let ([local-table (mcons '*table* null)])
+    (define (assoc key records)
+      (cond [(null? records) false]
+             [(equal? key (mcar (mcar records))) (mcar records)]
+             [#t (assoc key (mcdr records))]))
+    (define (lookup keys)
+      (define (helper keys table)
+        (cond [(null? keys) false]
+              [(= (length keys) 1)
+               (let ([record (assoc (car keys) (mcdr table))])
+                 (if record
+                     (mcdr record)
+                     false))]
+              [#t
+               (let ([record (assoc (car keys) (mcdr table))])
+                 (if record
+                     (helper (cdr keys) record)
+                     false))]))
+      (helper keys local-table))
+    (define (keychain keys value init)
+      (define (helper keys)
+        (if (null? keys)
+            value
+            (mcons (mcons (car keys)
+                          (helper (cdr keys))) null)))
+      (mcons (mcons (car keys) (helper (cdr keys))) init))
+    (define (insert! keys value)
+      (define (helper keys table)
+        (cond [(null? keys) (error "At least one key must be present")]
+              [(= (length keys) 1)
+               (let ([record (assoc (car keys) (mcdr table))])
+                 (cond [record (set-mcdr! record value)
+                               'ok]
+                       [#t (set-mcdr! table
+                                (mcons (mcons (car keys) value)
+                                       (mcdr table)))]))]
+              [#t
+               (let ([record (assoc (car keys) (mcdr table))])
+                 (cond [record (helper (cdr keys) (mcdr record))]
+                       [#t (set-mcdr! table (keychain keys value (mcdr table)))
+                           'ok]))]))
+      (helper keys local-table))
+    (define print local-table)
+    (define (dispatch m)
+      (cond [(eq? m 'lookup-proc) lookup]
+            [(eq? m 'insert-proc!) insert!]
+            [(eq? m 'print) print]
+            [#t (error "Unknown operation -- TABLE" m)]))
+    dispatch))

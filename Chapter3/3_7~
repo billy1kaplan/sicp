@@ -1,0 +1,35 @@
+#lang racket
+
+(define (make-account balance pass)
+  (let ([incorrect 0])
+    (define (call-the-cops)
+      (error "COPS ARE IN PURSUIT"))
+    (define (withdraw amount)
+      (if (>= balance amount)
+          (begin (set! balance (- balance amount))
+                 balance)
+          "Insufficient funds"))
+    (define (deposit amount)
+      (begin (set! balance (+ balance amount))
+             balance))
+    (define (dispatch pw m)
+      (if (not (eq? pw pass))
+          (begin (set! incorrect (+ incorrect 1))
+                 (if (= incorrect 7)
+                     (call-the-cops)
+                     (error "Incorrect Password")))
+          (begin (set! incorrect 0)
+                 (cond [(eq? m 'withdraw) withdraw]
+                       [(eq? m 'deposit) deposit]
+                       [(eq? m 'check-pw) #t]
+                       [#t (error "Unknown Operation")]))))
+    dispatch))
+
+(define (make-joint account orig-pw other-pw)
+  (define (dispatch pw m)
+    (if (or (equal? pw orig-pw) (equal? pw other-pw))
+        (account orig-pw m)
+        (error "Incorrect Password")))
+  (if (account orig-pw 'check-pw)
+      dispatch
+      (error "Incorrect Password")))

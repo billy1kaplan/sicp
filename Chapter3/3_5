@@ -1,0 +1,13 @@
+#lang racket
+
+(define (rand seed)
+  (define (next x)
+    (modulo (+ (* 31 x) 17) 71))
+  (lambda (op)
+    (cond [(eq? op 'generate)
+           (begin (set! seed (next seed))
+                        seed)]
+           [(eq? op 'reset)
+            (lambda (x)
+              (set! seed x))]
+           [#t (error "Unknown op")])))

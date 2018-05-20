@@ -1,0 +1,67 @@
+#lang racket
+;; b
+(define (variable? x) (symbol? x))
+
+(define (same-variable? v1 v2)
+  (and (variable? v1) (variable? v2) (eq? v1 v2)))
+
+(define (=number? n v)
+  (and (number? n) (= n v)))
+
+(define (deriv exp var)
+  (cond [(number? exp) 0]
+        [(variable? exp) (if (same-variable? exp var) 1 0)]
+        [else ((get 'deriv (operator exp)) (operands exp) var)]))
+
+(define (operator exp) (car exp))
+
+(define (operands exp) (cdr exp))
+
+(define (install-sum-package)
+  (define (addend exp) (car exp))
+
+  (define (augend exp) (cadr exp))
+   
+  (define (make-sum a1 a2)
+    (cond [(=number? a1 0) a2]
+          [(=number? a2 0) a1]
+          [(and (number? a1) (number? a2)) (+ a1 a2)]
+          [else (list '+ a1 a2)]))
+
+  (put `deriv `+
+       (lambda (operands var)
+         (make-sum (deriv (addend operands) var)
+                   (deriv (augend operands) var)))))
+
+(define (install-prod-package)
+  (define (multicand exp) (car exp))
+
+  (define (multiplier exp) (cdr exp))
+  
+  (define (make-product m1 m2)
+    (cond [(or (=number? m1 0) (=number? m2 0)) 0]
+          [(=number? m1 1) m2]
+          [(=number? m2 1) m1]
+          [(and (number? m1) (number? m2)) (* m1 m2)]
+          [else (list '* m1 m2)]))
+
+    (define (make-sum a1 a2)
+    (cond [(=number? a1 0) a2]
+          [(=number? a2 0) a1]
+          [(and (number? a1) (number? a2)) (+ a1 a2)]
+          [else (list '+ a1 a2)]))
+
+  (put `deriv `*
+       (lambda (operands var)
+         (make-sum (make-product (deriv (multicand operands) var)
+                                 (multiplier operands))
+                   (make-product (multicand operands)
+                                 (deriv (multiplier operands) var))))))
+
+(define my-table (make-hash))
+(define (put op type value) (hash-set! my-table (list op type) value))
+(define (get op type) (begin (hash-ref my-table (list op type) #f)))
+
+(install-sum-package)
+(install-prod-package)
+(deriv '(+ x x x x) `x)

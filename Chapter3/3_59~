@@ -1,0 +1,93 @@
+#lang racket
+(define the-empty-stream null)
+
+(define (stream-null? s)
+  (null? s))
+
+(define-syntax delay
+  (syntax-rules ()
+    ((_ exp) (lambda () exp))))
+
+(define-syntax cons-stream
+  (syntax-rules ()
+    ((_ a b) (cons a (delay b)))))
+
+(define (force f)
+  (f))
+
+(define (car-stream s)
+  (car s))
+
+(define (cdr-stream s)
+  (force (cdr s)))
+
+(define (display-line x)
+  (newline)
+  (display x))
+
+(define (print n s)
+  (if (= n 0)
+      (display-line 'done)
+      (begin (display-line (car-stream s))
+             (print (- n 1) (cdr-stream s)))))
+
+(define (stream-map proc . argstreams)
+  (if (stream-null? (car argstreams))
+      the-empty-stream
+      (cons-stream
+       (apply proc (map car-stream argstreams))
+       (apply stream-map
+              (cons proc (map cdr-stream argstreams))))))
+
+(define (add-streams s1 s2)
+  (stream-map + s1 s2))
+
+(define (ones) (cons-stream 1 (ones)))
+
+(define (integers-starting-from n)
+  (cons-stream n (integers-starting-from (+ n 1))))
+(define integers (integers-starting-from 1))
+
+(define (partial-sums s)
+  (cons-stream (car-stream s)
+               (add-streams (cdr-stream s)
+                            (partial-sums s))))
+(define p (partial-sums (ones)))
+
+(define (scale-stream s n)
+  (stream-map (lambda (x) (* n x)) s))
+
+(define (merge s1 s2)
+  (cond [(stream-null? s1) s2]
+        [(stream-null? s2) s1]
+        [#t
+         (let ([s1car (car-stream s1)]
+               [s2car (car-stream s2)])
+           (cond [(< s1car s2car)
+                  (cons-stream s1car (merge (cdr-stream s1) s2))]
+                 [(> s1car s2car)
+                  (cons-stream s2car (merge s1 (cdr-stream s2)))]
+                 [#t
+                  (cons-stream s1car
+                               (merge (cdr-stream s1)
+                                      (cdr-stream s2)))]))]))
+
+(define (scaled n)
+  (scale-stream integers n))
+(define S (cons-stream 1 (merge (merge (scaled 2) (scaled 3)) (scaled 5))))
+(define S1 (cons-stream 1 (merge (merge (scale-stream S1 2) (scale-stream S1 3)) (scale-stream S1 5))))
+(define fib (cons-stream 0
+                         (cons-stream 1
+                                      (add-streams (cdr-stream fib)
+                                                   fib))))
+(define (div-streams s1 s2)
+  (stream-map / s1 s2))
+
+(define (integrate-series s)
+  (div-streams s integers))
+
+(define cosine-series
+  (cons-stream 1 (integrate-series (scale-stream sine-series -1))))
+
+(define sine-series
+  (cons-stream 0 (integrate-series cosine-series)))

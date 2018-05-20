@@ -1,0 +1,8 @@
+Generic operations with explicit dispatch: to add new type
+- 
+
+Message: to add new types, we install additional type into the type table. To add a new operation, each existing type must support the new operation.
+- GOOD FOR ADDING NEW TYPES
+
+Message passing: to add new types, each existing dispatch object must be updated to support the new type. For a new operation, a new message object must be created.
+- GOOD FOR ADDING NEW OPERATIONS

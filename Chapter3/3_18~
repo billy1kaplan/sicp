@@ -1,0 +1,12 @@
+#lang racket
+
+(define (cycle? x)
+  (define (check x prev)
+    (if (memq x prev)
+        false
+        (if (null? x)
+            true
+            (and (check (car x) (cons x prev))
+                 (check (cdr x) (cons x prev))))))
+  (check x null))
+                   

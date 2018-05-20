@@ -1,0 +1,431 @@
+#lang racket
+(define the-empty-stream null)
+
+(define (stream-null? s)
+  (null? s))
+
+(define-syntax delay
+  (syntax-rules ()
+    ((_ exp) (lambda () exp))))
+
+(define-syntax cons-stream
+  (syntax-rules ()
+    ((_ a b) (cons a (delay b)))))
+
+(define (force f)
+  (f))
+
+(define (car-stream s)
+  (car s))
+
+(define (cdr-stream s)
+  (force (cdr s)))
+
+(define (display-line x)
+  (newline)
+  (display x))
+
+(define (print n s)
+  (if (= n 0)
+      (display-line 'done)
+      (begin (display-line (car-stream s))
+             (print (- n 1) (cdr-stream s)))))
+
+(define (stream-map proc . argstreams)
+  (if (stream-null? (car argstreams))
+      the-empty-stream
+      (cons-stream
+       (apply proc (map car-stream argstreams))
+       (apply stream-map
+              (cons proc (map cdr-stream argstreams))))))
+
+(define (add-streams s1 s2)
+  (stream-map + s1 s2))
+
+(define (ones) (cons-stream 1 (ones)))
+
+(define (integers-starting-from n)
+  (cons-stream n (integers-starting-from (+ n 1))))
+(define integers (integers-starting-from 1))
+
+(define (partial-sums s)
+  (cons-stream (car-stream s)
+               (add-streams (cdr-stream s)
+                            (partial-sums s))))
+(define p (partial-sums (ones)))
+
+(define (scale-stream s n)
+  (stream-map (lambda (x) (* n x)) s))
+
+(define (merge s1 s2)
+  (cond [(stream-null? s1) s2]
+        [(stream-null? s2) s1]
+        [#t
+         (let ([s1car (car-stream s1)]
+               [s2car (car-stream s2)])
+           (cond [(< s1car s2car)
+                  (cons-stream s1car (merge (cdr-stream s1) s2))]
+                 [(> s1car s2car)
+                  (cons-stream s2car (merge s1 (cdr-stream s2)))]
+                 [#t
+                  (cons-stream s1car
+                               (merge (cdr-stream s1)
+                                      (cdr-stream s2)))]))]))
+
+(define (scaled n)
+  (scale-stream integers n))
+(define S (cons-stream 1 (merge (merge (scaled 2) (scaled 3)) (scaled 5))))
+(define S1 (cons-stream 1 (merge (merge (scale-stream S1 2) (scale-stream S1 3)) (scale-stream S1 5))))
+(define fib (cons-stream 0
+                         (cons-stream 1
+                                      (add-streams (cdr-stream fib)
+                                                   fib))))
+(define (div-streams s1 s2)
+  (stream-map / s1 s2))
+
+(define (mul-streams s1 s2)
+  (stream-map * s1 s2))
+
+(define (integrate-series s)
+  (div-streams s integers))
+
+(define cosine-series
+  (cons-stream 1 (integrate-series (scale-stream sine-series -1))))
+
+(define sine-series
+  (cons-stream 0 (integrate-series cosine-series)))
+
+(define (take n s)
+  (if (= n 0)
+      the-empty-stream
+      (cons-stream (car-stream s)
+                   (take (- n 1) (cdr-stream s)))))
+
+(define (sum-multiple s1 s2)
+  (partial-sums (mul-streams s1 s2)))
+
+;(define (mul-series s1 s2)
+;  (cons-stream (* (car-stream s1) (car-stream s2))
+;               (cons-stream (+ (* (car-stream s1) (car-stream (cdr-stream s2)))
+;                               (* (car-stream s2) (car-stream (cdr-stream s1))))
+;                            (cons-stream (+ (* (car-stream s1) (car-stream (cdr-stream (cdr-stream s2))))
+;                                            (* (car-stream s2) (car-stream (cdr-stream (cdr-stream s1))))
+;                                            (* (car-stream (cdr-stream s1)) (car-stream (cdr-stream s2))))
+;                                         null))))
+
+(define (mul-series s1 s2)
+  (cons-stream (* (car-stream s1) (car-stream s2))
+               (add-streams (add-streams (scale-stream (cdr-stream s1) (car-stream s2))
+                                         (scale-stream (cdr-stream s2) (car-stream s1)))
+                            (cons-stream 0 (mul-series (cdr-stream s1) (cdr-stream s2))))))
+
+(define (mul-series1 s1 s2)
+  (cons-stream (* (car-stream s1) (car-stream s2))
+               (add-streams (scale-stream (cdr-stream s2) (car-stream s1))
+                            (mul-series1 (cdr-stream s1) s2))))
+                            
+(define (c s1 s2)
+  (cons-stream (add-streams (scale-stream (cdr-stream s1) (car-stream s2))
+                            (scale-stream (cdr-stream s2) (car-stream s1)))
+               (cons-stream (add-streams (scale-stream (cdr-stream s1) (car-stream s2))
+                                         (scale-stream (cdr-stream s2) (car-stream s1)))
+                            null)))
+
+                                          
+;                            (add-streams (scale-stream (cdr-stream s1) (car-stream s2))
+;                                         (mul-series (cdr-stream s1) (cdr-stream s2))))))
+
+(define T (mul-series integers integers))
+;(print 10 T)
+(define T1 (mul-series integers integers))
+;(print 10 T1)
+;(define (mul-series s1 s2)
+;  (cons-stream (* (car-stream s1) (car-stream s2))
+;               (add-streams ?? ??)))
+
+
+(define s1 (mul-series cosine-series cosine-series))
+(define s2 (mul-series sine-series sine-series))
+(define s3 (add-streams s1 s2))
+;(print 10 s3)
+
+;; 3.61
+(define (invert-unit-series S)
+  (define inverted
+    (cons-stream 1
+                 (scale-stream (mul-series (cdr-stream S) inverted) -1)))
+  inverted)
+
+(define (w S)
+  (define invert-unit-series
+    (cons-stream 1
+                 (scale-stream (mul-series (cdr-stream S) invert-unit-series) -1)))
+  invert-unit-series)
+
+(define inverted (invert-unit-series integers))
+(define test (mul-series integers inverted))
+(define inverted2 (w integers))
+;(print 5 inverted)
+;(print 5 inverted2)
+
+;; 3.62
+(define (div-series S1 S2)
+  (if (= (car-stream S2) 0)
+      (error "Attempting to divide by 0")
+      (mul-series S1 (invert-unit-series S2))))
+
+;(print 20 (div-series sine-series cosine-series))
+
+;; 3.64
+(define (stream-limit S e)
+  (if (< (abs (- (car-stream S) (car-stream (cdr-stream S)))) e)
+      (car-stream S)
+      (stream-limit (cdr-stream S) e)))
+
+(define (average x y)
+  (/ (+ x y) 2))
+(define (sqrt-improve guess x)
+  (average guess (/ x guess)))
+
+(define (sqrt-stream x)
+  (define guesses
+    (cons-stream 1.0
+                 (stream-map (lambda (guess)
+                               (sqrt-improve guess x)) guesses)))
+  guesses)
+(define (sqrt x tolerance)
+  (stream-limit (sqrt-stream x) tolerance))
+
+(sqrt 2 0.01)
+
+;; 3.65
+(define (log2-s n)
+  (cons-stream (/ 1.0 n)
+               (stream-map - (log2-s (+ n 1)))))
+
+(define log2 (partial-sums (log2-s 1)))
+
+(define (square n) (* n n))
+
+(define (stream-ref s n)
+  (if (= n 0)
+      (car-stream s)
+      (stream-ref (cdr-stream s) (- n 1))))
+
+(define (euler-transform s)
+  (let ((s0 (stream-ref s 0))
+        (s1 (stream-ref s 1))
+        (s2 (stream-ref s 2)))
+    (cons-stream (- s2 (/ (square (- s2 s1))
+                    (+ s0 (* -2 s1) s2)))
+                 (euler-transform (cdr-stream s)))))
+
+;(print 10 log2)
+;(print 10  (euler-transform log2))
+
+;; 3.66
+(define (interleave s1 s2)
+  (if (stream-null? s1)
+      s2
+      (cons-stream (stream-car s1)
+                   (interleave s2 (stream-cdr s1)))))
+
+(define stream-car car-stream)
+(define stream-cdr cdr-stream)
+
+(define (pairs s t)
+  (cons-stream (list (stream-car s) (stream-car t))
+               (interleave
+                (stream-map (lambda (x) (list (stream-car s) x))
+                            (stream-cdr t))
+                (pairs (stream-cdr s) (stream-cdr t)))))
+
+;(print 30 (pairs integers integers))
+(define (filter-stream p? s)
+  (if (p? (car-stream s))
+      (cons-stream (car-stream s) (filter-stream p? (cdr-stream s)))
+      (filter-stream p? (cdr-stream s))))
+(define (flipped s)
+  (stream-map (lambda (x) (begin (display x) (list (cadr x) (car x))))
+              (filter-stream (lambda (x) (not (= (car x) (cadr x)))) s)))
+
+(define (all-pairs1 s t)
+  (cons-stream (list (stream-car s) (stream-car t))
+               (interleave
+                (stream-map (lambda (x) (list (stream-car s) x))
+                            (stream-cdr t))
+                (interleave (flipped (all-pairs1 (stream-cdr s) (stream-cdr t)))
+                            (all-pairs (stream-cdr s) (stream-cdr t))))))
+
+(define (all-pairs s t)
+  (cons-stream (list (stream-car s) (stream-car t))
+               (interleave (interleave
+                            (stream-map (lambda (x) (list (stream-car s) x)) (stream-cdr t))
+                            (stream-map (lambda (x) (list x (stream-car s))) (stream-cdr t)))
+                            (all-pairs (stream-cdr s) (stream-cdr t)))))
+
+(define (test1 s t)
+  (interleave (pairs s t) (flipped (pairs s t))))
+;(print 10 (all-pairs integers integers))
+
+;; 3.69
+(define (triples S T U)
+  (cons-stream (list (stream-car S) (stream-car T) (stream-car U))
+               (interleave (stream-map (lambda (x) (list (stream-car S) (car x) (cadr x))) (stream-cdr (pairs T U)))
+                           (triples (stream-cdr S) (stream-cdr T) (stream-cdr U)))))
+(define trips (triples integers integers integers))
+;(print 10 trips)
+(define pythag-triples
+  (filter-stream (lambda (x) (=
+                              (+ (square (car x))
+                                 (square (cadr x)))
+                              (square (caddr x))))
+                 trips))
+;(print 5 pythag-triples)
+
+; 3.70
+(define (mergew s1 s2 w)
+  (cond [(stream-null? s1) s2]
+        [(stream-null? s2) s1]
+        [#t
+         (let ([s1car (car-stream s1)]
+               [s2car (car-stream s2)])
+           (cond [(< (w s1car) (w s2car))
+                  (cons-stream s1car (mergew (cdr-stream s1) s2 w))]
+                 [(> (w s1car) (w s2car))
+                  (cons-stream s2car (mergew s1 (cdr-stream s2) w))]
+                 [#t
+                  (cons-stream s1car
+                               (mergew (cdr-stream s1)
+                                       s2 w))]))]))
+
+(define (weight i)
+  (+ (car i) (cadr i)))
+
+(define (weighted-pairs s t w)
+  (cons-stream (list (stream-car s) (stream-car t))
+               (mergew
+                (stream-map (lambda (x) (list (stream-car s) x))
+                            (stream-cdr t))
+                (weighted-pairs (stream-cdr s) (stream-cdr t) w)
+                w)))
+
+(define int-pairs (weighted-pairs integers integers weight))
+;(print 20 int-pairs)
+
+(define (other i)
+  (+ (* 2 (car i)) (* 3 (cadr i)) (* 5 (car i) (cadr i))))
+
+(define (div? x y) (= 0 (modulo x y)))
+(define weird (filter-stream (lambda (x)
+                               (let ((check? (lambda (y)
+                                               (and
+                                                (not (div? y 2))
+                                                (not (div? y 3))
+                                                (not (div? y 5))))))
+                                 (and (check? (car x)) (check? (cadr x)))))
+                             (weighted-pairs integers integers other)))
+
+; 3.71
+(define (cube n)
+  (* n n n))
+
+(define (cubic x)
+  (+ (cube (car x)) (cube (cadr x))))
+
+(define (consec S w)
+  (if (= (w (car-stream S)) (w (car-stream (cdr-stream S))))
+      (cons-stream (car-stream S)
+                   (consec (cdr-stream S) w))
+      (consec (cdr-stream S) w)))
+
+(define cubed (weighted-pairs integers integers cubic))
+(define consecutive-cubes
+  (consec cubed cubic))
+
+;(print 1 consecutive-cubes)
+(define TS (stream-map (lambda (x) (cons x (cubic x))) cubed))
+;(print 200 TS)
+;(print 10 cubed)
+;(print 3 consecutive-cubes)
+(define cube-val (stream-map cubic consecutive-cubes))
+;(print 6 cube-val)
+
+(define (squared x)
+  (+ (square (car x)) (square (cadr x))))
+(define (three-consec S)
+  (let ([first (car-stream S)]
+        [second (car-stream (cdr-stream S))]
+        [third (car-stream (cdr-stream (cdr-stream S)))])
+    (if (= (squared first) (squared second) (squared third))
+        (cons-stream
+         (list (squared first) first second third)
+         (three-consec (cdr-stream S)))
+        (three-consec (cdr-stream S)))))
+
+(define consec-s
+  (three-consec (weighted-pairs integers integers squared)))
+;(print 6 consec-s)
+
+;; 3.73
+(define (integral integrand initial-value dt)
+  (define int
+    (cons-stream initial-value
+                 (add-streams (scale-stream integrand dt)
+                              int)))
+  int)
+
+(define (RC R C dt)
+  (lambda (i v0)
+    (add-streams (scale-stream i R)
+                 (integral (scale-stream i (/ 1 C)) v0 dt))))
+
+(define RC1 (RC 5 1 0.5))
+(print 10 (RC1 (ones) 0))
+
+;; 3.74
+;(define zero-crossings
+;  (stream-map sign-change-detector sense-data (cdr-stream sense-data)))
+(define (pos? n) (>= n 0))
+(define (neg? n) (< n 0))
+(define sign-change-detector
+  (lambda (a b)
+    (cond [(and (pos? a) (pos? b)) 0]
+          [(and (neg? a) (neg? b)) 0]
+          [(and (pos? a) (neg? b)) 1]
+          [(and (neg? a) (pos? b)) -1])))
+
+(define (list->stream l)
+  (if (null? l)
+      the-empty-stream
+      (cons-stream (car l)
+                   (list->stream (cdr l)))))
+
+(define sense-data-list (list 1 2 1.5 1 -0.1 -2 -3 -2 -0.5 0.2 3 4))
+(define sense-data (list->stream sense-data-list))
+
+(define zero-crossings
+  (stream-map sign-change-detector sense-data (cons-stream 0 sense-data)))
+
+(print 12 zero-crossings)
+
+;; 3.75
+
+(define (make-zero-crossings input-stream last-value last-average)
+  (let ((avpt (/ (+ (stream-car input-stream) last-value) 2)))
+    (cons-stream (sign-change-detector avpt last-average)
+                 (make-zero-crossings (stream-cdr input-stream) (stream-car input-stream)
+                                      avpt))))
+
+;; 3.76
+(define (smooth S)
+  (let ((avpt (/ (+ (stream-car S) (stream-car (stream-cdr S))))))
+    (cons-stream avpt (smooth (cdr-stream S)))))
+
+(define (smooth-map S)
+  (stream-map (lambda (x y) (/ (+ x y) 2)) S (cdr-stream S)))
+
+(define zero-crossings-smooth
+  (stream-map sign-change-detector (smooth sense-data) (smooth (cons-stream 0 sense-data))))
+
+(print 10 zero-crossings-smooth)
