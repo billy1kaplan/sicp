@@ -1,0 +1,11 @@
+(define (run-forever) (run-forever))
+
+(define (try p)
+  (if (halts? p p)
+      (run-forever)
+      'halted))
+
+Assume that (try try) halts, then (try try) will never halt since we call (run-forever)
+Assume that (try try) does not halt, then (try try) will halt with 'halted
+
+Since the other functions are valid, this contradiction proves that writing the function "halts?" must be impossible.

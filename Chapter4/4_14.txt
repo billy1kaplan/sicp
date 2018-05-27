@@ -1,0 +1,6 @@
+The function accepted in map may not be handled by the underlying scheme
+implementation. The function must be handled by our evaluator since it may not
+be handled as a primitive procedure.
+
+e.g. ('primitive map '(lambda (x) (- x)) (list 1 2 3)) will not be understood
+by the underlying scheme interpreter

@@ -438,7 +438,7 @@
     (scan (frame-variables frame)
           (frame-values frame))))
 
-;; Paired environment
+;; Paired environment: 4.11
 (define (make-frame-pairs var-vals)
   var-vals)
 
