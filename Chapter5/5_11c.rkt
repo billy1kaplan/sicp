@@ -1,8 +1,5 @@
 #lang racket
 
-;; 'a will take the value of 3 when getting to there
-;; because we build up an association list in order of the text
-
 ;; Machine-level procedures
 (define (make-machine register-names ops controller-text)
   (let ((machine (make-new-machine)))
@@ -76,24 +73,35 @@
 (define (make-new-machine)
   (let ((pc (make-register 'pc))
         (flag (make-register 'flag))
-        (stack (make-stack))
+        (stacks '())
         (the-instruction-sequence '()))
     (let ((the-ops
            (mlist (mlist 'initialize-stack
-                         (lambda () (stack 'initialize)))))
+                         (lambda () (for-each-m
+                                     (lambda (stack)
+                                       (stack 'initialize))
+                                     stacks)))))
           (register-table (mlist (mlist 'pc pc) (mlist 'flag flag))))
       (define (allocate-register name)
         (if (massoc name register-table)
             (error "Multiply defined register: " name)
+            (begin
+              (set! stacks (mcons (mcons name (make-stack))
+                                  stacks)) ;; Add a stack for the register added to the machine
             (set! register-table
                   (mcons (mlist name (make-register name))
-                        register-table)))
+                        register-table))))
         'register-allocated)
       (define (lookup-register name)
         (let ((val (massoc name register-table)))
           (if val
               (mcadr val)
               (error "Unknown register: " name))))
+      (define (retrieve-stack name)
+        (let ((s (massoc name stacks)))
+          (if s
+              (mcdr s)
+              (error "Could not find stack for register" name))))
       (define (execute)
         (let ((insts (get-contents pc)))
           (if (null? insts)
@@ -106,14 +114,12 @@
                (set-contents! pc the-instruction-sequence)
                (execute))
               ((eq? message 'install-instruction-sequence)
-               (lambda (seq) (set! the-instruction-sequence seq)
-                 (display seq)
-                 (newline)))
+               (lambda (seq) (set! the-instruction-sequence seq)))
               ((eq? message 'allocate-register) allocate-register)
               ((eq? message 'get-register) lookup-register)
               ((eq? message 'install-operations)
                (lambda (ops) (set! the-ops (mappend the-ops ops))))
-              ((eq? message 'stack) stack)
+              ((eq? message 'stack) retrieve-stack)
               ((eq? message 'operations) the-ops)
               (else (error "Unknown request -- MACHINE" message))))
       dispatch)))
@@ -145,12 +151,10 @@
                       (lambda (insts labels)
                         (let ((next-inst (mcar text)))
                           (if (symbol? next-inst)
-                              (if (massoc next-inst labels)
-                                  (error "Duplicate label encountered -- EXTRACT-LABELS" next-inst)
-                                  (receive insts
-                                           (mcons (make-label-entry next-inst
-                                                                    insts)
-                                                  labels)))
+                              (receive insts
+                                       (mcons (make-label-entry next-inst
+                                                                insts)
+                                             labels))
                               (receive (mcons (make-instruction next-inst)
                                              insts)
                                        labels)))))))
@@ -295,7 +299,7 @@
   (let ((reg (get-register machine
                            (stack-inst-reg-name inst))))
     (lambda ()
-      (push stack (get-contents reg))
+      (push (stack (stack-inst-reg-name inst)) (get-contents reg))
       (advance-pc pc))))
 
 
@@ -304,7 +308,7 @@
   (let ((reg (get-register machine
                            (stack-inst-reg-name inst))))
     (lambda ()
-      (set-contents! reg (pop stack))
+      (set-contents! reg (pop (stack (stack-inst-reg-name inst))))
       (advance-pc pc))))
 
 (define (stack-inst-reg-name stack-instruction) (mcadr stack-instruction))
@@ -402,24 +406,19 @@
 (define (mlist . vals)
   (foldr mcons '() vals))
 
-(define test
+
+(define test-machine
   (make-machine
-   '(a)
+   '(a b c res-a res-b res-c)
    '()
-   '(start
-      (goto (label here))
-     here
-       (assign a (const 3))
-       (goto (label there))
-     here
-       (assign a (const 4))
-       (goto (label there))
-       there)))
+   '((assign a (const 1))
+     (assign b (const 2))
+     (assign c (const 3))
+     (save a)
+     (save b)
+     (save c)
+     (assign a (const 4))
+     (restore a))))
 
-(start test)
-(get-register-contents test 'a)
-
-(provide make-machine)
-(provide set-register-contents!)
-(provide start)
-(provide get-register-contents)
+(start test-machine)
+(get-register-contents test-machine 'a) ;; This should be 1. Since each register has its own stack, (reg a)'s stack is (1), and we retrieve this value.

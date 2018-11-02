@@ -1,8 +1,5 @@
 #lang racket
 
-;; 'a will take the value of 3 when getting to there
-;; because we build up an association list in order of the text
-
 ;; Machine-level procedures
 (define (make-machine register-names ops controller-text)
   (let ((machine (make-new-machine)))
@@ -106,9 +103,7 @@
                (set-contents! pc the-instruction-sequence)
                (execute))
               ((eq? message 'install-instruction-sequence)
-               (lambda (seq) (set! the-instruction-sequence seq)
-                 (display seq)
-                 (newline)))
+               (lambda (seq) (set! the-instruction-sequence seq)))
               ((eq? message 'allocate-register) allocate-register)
               ((eq? message 'get-register) lookup-register)
               ((eq? message 'install-operations)
@@ -145,12 +140,10 @@
                       (lambda (insts labels)
                         (let ((next-inst (mcar text)))
                           (if (symbol? next-inst)
-                              (if (massoc next-inst labels)
-                                  (error "Duplicate label encountered -- EXTRACT-LABELS" next-inst)
-                                  (receive insts
-                                           (mcons (make-label-entry next-inst
-                                                                    insts)
-                                                  labels)))
+                              (receive insts
+                                       (mcons (make-label-entry next-inst
+                                                                insts)
+                                             labels))
                               (receive (mcons (make-instruction next-inst)
                                              insts)
                                        labels)))))))
@@ -296,6 +289,7 @@
                            (stack-inst-reg-name inst))))
     (lambda ()
       (push stack (get-contents reg))
+      (push stack (stack-inst-reg-name inst)) ; save the register name into the stack
       (advance-pc pc))))
 
 
@@ -304,8 +298,12 @@
   (let ((reg (get-register machine
                            (stack-inst-reg-name inst))))
     (lambda ()
-      (set-contents! reg (pop stack))
-      (advance-pc pc))))
+      (let ((stack-reg (pop stack))
+            (reg-reg (stack-inst-reg-name inst)))
+        (if (eq? stack-reg reg-reg)
+            (begin (set-contents! reg (pop stack))
+                   (advance-pc pc))
+            (error "Stack register does not match register" stack-reg reg-reg))))))
 
 (define (stack-inst-reg-name stack-instruction) (mcadr stack-instruction))
 
@@ -402,24 +400,88 @@
 (define (mlist . vals)
   (foldr mcons '() vals))
 
-(define test
+;; Test the stack register matching:
+;; This one should work:
+(define fib-rec-pass
   (make-machine
-   '(a)
-   '()
-   '(start
-      (goto (label here))
-     here
-       (assign a (const 3))
-       (goto (label there))
-     here
-       (assign a (const 4))
-       (goto (label there))
-       there)))
+    '(n retval retaddr x)
+    `((< ,<) (+ ,+) (- ,-))
+    '((assign retaddr (label fib-end))
+      fib
+      (test (op <) (reg n) (const 2))
+      (branch (label fib-base))
+      (save retaddr)
+      (save n)
+      (assign retaddr (label after-fib-1))
+      (assign n (op -) (reg n) (const 1))
+      (goto (label fib))
 
-(start test)
-(get-register-contents test 'a)
+      after-fib-1
+      (restore n)
+      ;(restore retaddr) <= retaddr can never change in between. The benefit of pushing the value after the continuation (we can access value w/o going through)
+      (assign n (op -) (reg n) (const 2))
+      ;(save retaddr) <= retaddr thrown away on the next line, so not used
+      (assign retaddr (label afterfib-n-2))
+      (save retval)
+      (goto (label fib))
 
-(provide make-machine)
-(provide set-register-contents!)
-(provide start)
-(provide get-register-contents)
+      afterfib-n-2
+      (assign n (reg retval))
+      (restore retval)
+      (restore retaddr)
+      (assign retval
+              (op +) (reg retval) (reg n))
+      (goto (reg retaddr))
+
+      fib-base
+      (assign retval (reg n))
+      (goto (reg retaddr))
+
+      fib-end)))
+
+(set-register-contents! fib-rec-pass 'n 5)
+(start fib-rec-pass)
+(get-register-contents fib-rec-pass 'retval)
+
+
+;; This one should fail:
+(define fib-rec
+  (make-machine
+    '(n retval retaddr x)
+    `((< ,<) (+ ,+) (- ,-))
+    '((assign retaddr (label fib-end))
+      fib
+      (test (op <) (reg n) (const 2))
+      (branch (label fib-base))
+      (save retaddr)
+      (save n)
+      (assign retaddr (label after-fib-1))
+      (assign n (op -) (reg n) (const 1))
+      (goto (label fib))
+
+      after-fib-1
+      (restore n)
+      ;(restore retaddr) <= retaddr can never change in between. The benefit of pushing the value after the continuation (we can access value w/o going through)
+      (assign n (op -) (reg n) (const 2))
+      ;(save retaddr) <= retaddr thrown away on the next line, so not used
+      (assign retaddr (label afterfib-n-2))
+      (save retval)
+      (goto (label fib))
+
+      afterfib-n-2
+;      (assign n (reg retval))
+      (restore n) ; <= directly put retval into the n register
+      (restore retaddr)
+      (assign retval
+              (op +) (reg retval) (reg n)) ; <= same as before, but retval is old, n is new
+      (goto (reg retaddr))
+
+      fib-base
+      (assign retval (reg n))
+      (goto (reg retaddr))
+
+      fib-end)))
+
+(set-register-contents! fib-rec 'n 5)
+(start fib-rec)
+(get-register-contents fib-rec 'retval)

@@ -1,8 +1,5 @@
 #lang racket
 
-;; 'a will take the value of 3 when getting to there
-;; because we build up an association list in order of the text
-
 ;; Machine-level procedures
 (define (make-machine register-names ops controller-text)
   (let ((machine (make-new-machine)))
@@ -106,9 +103,7 @@
                (set-contents! pc the-instruction-sequence)
                (execute))
               ((eq? message 'install-instruction-sequence)
-               (lambda (seq) (set! the-instruction-sequence seq)
-                 (display seq)
-                 (newline)))
+               (lambda (seq) (set! the-instruction-sequence seq)))
               ((eq? message 'allocate-register) allocate-register)
               ((eq? message 'get-register) lookup-register)
               ((eq? message 'install-operations)
@@ -145,12 +140,10 @@
                       (lambda (insts labels)
                         (let ((next-inst (mcar text)))
                           (if (symbol? next-inst)
-                              (if (massoc next-inst labels)
-                                  (error "Duplicate label encountered -- EXTRACT-LABELS" next-inst)
-                                  (receive insts
-                                           (mcons (make-label-entry next-inst
-                                                                    insts)
-                                                  labels)))
+                              (receive insts
+                                       (mcons (make-label-entry next-inst
+                                                                insts)
+                                             labels))
                               (receive (mcons (make-instruction next-inst)
                                              insts)
                                        labels)))))))
@@ -347,8 +340,8 @@
 (define (register-exp? exp) (tagged-list? exp 'reg))
 (define (register-exp-reg exp) (mcadr exp))
 
-(define (constant-exp? exp) (tagged-list? exp 'const))
-(define (constant-exp-value exp) (mcadr exp))
+(define (constant-exp? exp) (number? exp))
+(define (constant-exp-value exp) exp)
 
 (define (label-exp? exp) (tagged-list? exp 'label))
 (define (label-exp-label exp) (mcadr exp))
@@ -378,11 +371,15 @@
       (apply op (make-immutable (mmap (lambda (p) (p)) aprocs))))))
 
 (define (operation-exp? exp)
-  (and (mpair? exp) (tagged-list? (mcar exp) 'op)))
+  (and (mpair? exp)
+       (mpair? (mcar exp))
+       (symbol? (mcar (mcar exp)))
+       (null? (mcdr (mcar exp)))))
+
 
 (define (mcadr exp) (mcar (mcdr exp)))
 
-(define (operation-exp-op exp) (mcadr (mcar exp)))
+(define (operation-exp-op exp) (mcar (mcar exp)))
 (define (operation-exp-operands exp) (mcdr exp))
 
 (define (mcaar list) (mcar (mcar list)))
@@ -402,22 +399,41 @@
 (define (mlist . vals)
   (foldr mcons '() vals))
 
-(define test
-  (make-machine
-   '(a)
-   '()
-   '(start
-      (goto (label here))
-     here
-       (assign a (const 3))
-       (goto (label there))
-     here
-       (assign a (const 4))
-       (goto (label there))
-       there)))
+;; Syntactical changes:
+;; (const 0) => 0
+;; (op +) => (+)
 
-(start test)
-(get-register-contents test 'a)
+;; Test our machine!
+(define sqrt-machine-fewer-primitives
+  (make-machine
+   '(a guess t)
+   (list (list '- -)
+         (list '/ /)
+         (list '* *)
+         (list '+ +)
+         (list '< <))
+   '((assign guess 1.0)
+     test-b
+     (assign t (*) (reg guess) (reg guess))
+     (assign t (-) (reg t) (reg a))
+     (test (<) 0 (reg t))
+     (branch (label gt))
+     (assign t (*) (reg t) -1)
+     gt
+     (test (<) (reg t) 0.0001)
+     (branch (label iter-done))
+     (assign t (/) (reg a) (reg guess))
+     (assign t (+) (reg t) (reg guess))
+     (assign t (/) (reg t) 2)
+     (assign guess (reg t))
+     (goto (label test-b))
+     iter-done
+     (assign a (reg guess)))))
+
+(set-register-contents! sqrt-machine-fewer-primitives 'a 4)
+(start sqrt-machine-fewer-primitives)
+(get-register-contents sqrt-machine-fewer-primitives 'a)
+
 
 (provide make-machine)
 (provide set-register-contents!)

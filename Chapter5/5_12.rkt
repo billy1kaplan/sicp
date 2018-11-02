@@ -1,8 +1,5 @@
 #lang racket
 
-;; 'a will take the value of 3 when getting to there
-;; because we build up an association list in order of the text
-
 ;; Machine-level procedures
 (define (make-machine register-names ops controller-text)
   (let ((machine (make-new-machine)))
@@ -82,6 +79,23 @@
            (mlist (mlist 'initialize-stack
                          (lambda () (stack 'initialize)))))
           (register-table (mlist (mlist 'pc pc) (mlist 'flag flag))))
+      (define (mmember el list)
+        (cond ((null? list) #f)
+              ((equal? (mcar list) el) #t)
+              (else (mmember el (mcdr list)))))
+      (define (get-string x)
+        (if (mpair? x)
+            (get-string (mcar x))
+            (symbol->string x)))
+      (define (analyze-text)
+        (sort (make-immutable (foldr-m (lambda (cur acc)
+                                         (if (mmember cur acc)
+                                             acc
+                                             (mcons cur acc)))
+                                       '()
+                                       (mmap mcar the-instruction-sequence)))
+              (lambda (a b)
+                (string<? (get-string a) (get-string b)))))
       (define (allocate-register name)
         (if (massoc name register-table)
             (error "Multiply defined register: " name)
@@ -106,20 +120,22 @@
                (set-contents! pc the-instruction-sequence)
                (execute))
               ((eq? message 'install-instruction-sequence)
-               (lambda (seq) (set! the-instruction-sequence seq)
-                 (display seq)
-                 (newline)))
+               (lambda (seq) (set! the-instruction-sequence seq)))
               ((eq? message 'allocate-register) allocate-register)
               ((eq? message 'get-register) lookup-register)
               ((eq? message 'install-operations)
                (lambda (ops) (set! the-ops (mappend the-ops ops))))
               ((eq? message 'stack) stack)
               ((eq? message 'operations) the-ops)
+              ((eq? message 'analyze) (analyze-text))
               (else (error "Unknown request -- MACHINE" message))))
       dispatch)))
 
 (define (start machine)
   (machine 'start))
+
+(define (analyze machine)
+  (machine 'analyze))
 
 (define (get-register machine reg-name)
   ((machine 'get-register) reg-name))
@@ -145,12 +161,10 @@
                       (lambda (insts labels)
                         (let ((next-inst (mcar text)))
                           (if (symbol? next-inst)
-                              (if (massoc next-inst labels)
-                                  (error "Duplicate label encountered -- EXTRACT-LABELS" next-inst)
-                                  (receive insts
-                                           (mcons (make-label-entry next-inst
-                                                                    insts)
-                                                  labels)))
+                              (receive insts
+                                       (mcons (make-label-entry next-inst
+                                                                insts)
+                                             labels))
                               (receive (mcons (make-instruction next-inst)
                                              insts)
                                        labels)))))))
@@ -402,24 +416,43 @@
 (define (mlist . vals)
   (foldr mcons '() vals))
 
-(define test
+
+(define fib-rec
   (make-machine
-   '(a)
-   '()
-   '(start
-      (goto (label here))
-     here
-       (assign a (const 3))
-       (goto (label there))
-     here
-       (assign a (const 4))
-       (goto (label there))
-       there)))
+    '(n retval retaddr x)
+    `((< ,<) (+ ,+) (- ,-))
+    '((assign retaddr (label fib-end))
+      fib
+      (test (op <) (reg n) (const 2))
+      (branch (label fib-base))
+      (save retaddr)
+      (save n)
+      (assign retaddr (label after-fib-1))
+      (assign n (op -) (reg n) (const 1))
+      (goto (label fib))
 
-(start test)
-(get-register-contents test 'a)
+      after-fib-1
+      (restore n)
+      ;(restore retaddr) <= retaddr can never change in between. The benefit of pushing the value after the continuation (we can access value w/o going through)
+      (assign n (op -) (reg n) (const 2))
+      ;(save retaddr) <= retaddr thrown away on the next line, so not used
+      (assign retaddr (label afterfib-n-2))
+      (save retval)
+      (goto (label fib))
 
-(provide make-machine)
-(provide set-register-contents!)
-(provide start)
-(provide get-register-contents)
+      afterfib-n-2
+      (assign n (reg retval))
+      (restore retval)
+      (restore retaddr)
+      (assign retval
+              (op +) (reg retval) (reg n))
+      (goto (reg retaddr))
+
+      fib-base
+      (assign retval (reg n))
+      (goto (reg retaddr))
+
+      fib-end)))
+
+;; This just does the first bullet of 5.12
+(analyze fib-rec)

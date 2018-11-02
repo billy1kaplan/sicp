@@ -1,14 +1,8 @@
 #lang racket
 
-;; 'a will take the value of 3 when getting to there
-;; because we build up an association list in order of the text
-
 ;; Machine-level procedures
-(define (make-machine register-names ops controller-text)
+(define (make-machine ops controller-text)
   (let ((machine (make-new-machine)))
-    (for-each (lambda (register-name)
-                ((machine 'allocate-register) register-name))
-              register-names)
     ((machine 'install-operations) (make-mutable ops))
     ((machine 'install-instruction-sequence)
      (assemble (make-mutable controller-text) machine))
@@ -93,7 +87,9 @@
         (let ((val (massoc name register-table)))
           (if val
               (mcadr val)
-              (error "Unknown register: " name))))
+              (begin (allocate-register name)
+                     (mcadr (massoc name register-table))))))
+             ;; Don't fail lookups, just make one instead (error "Unknown register: " name))))
       (define (execute)
         (let ((insts (get-contents pc)))
           (if (null? insts)
@@ -106,9 +102,7 @@
                (set-contents! pc the-instruction-sequence)
                (execute))
               ((eq? message 'install-instruction-sequence)
-               (lambda (seq) (set! the-instruction-sequence seq)
-                 (display seq)
-                 (newline)))
+               (lambda (seq) (set! the-instruction-sequence seq)))
               ((eq? message 'allocate-register) allocate-register)
               ((eq? message 'get-register) lookup-register)
               ((eq? message 'install-operations)
@@ -145,12 +139,10 @@
                       (lambda (insts labels)
                         (let ((next-inst (mcar text)))
                           (if (symbol? next-inst)
-                              (if (massoc next-inst labels)
-                                  (error "Duplicate label encountered -- EXTRACT-LABELS" next-inst)
-                                  (receive insts
-                                           (mcons (make-label-entry next-inst
-                                                                    insts)
-                                                  labels)))
+                              (receive insts
+                                       (mcons (make-label-entry next-inst
+                                                                insts)
+                                             labels))
                               (receive (mcons (make-instruction next-inst)
                                              insts)
                                        labels)))))))
@@ -402,24 +394,42 @@
 (define (mlist . vals)
   (foldr mcons '() vals))
 
-(define test
+(define fib-rec
   (make-machine
-   '(a)
-   '()
-   '(start
-      (goto (label here))
-     here
-       (assign a (const 3))
-       (goto (label there))
-     here
-       (assign a (const 4))
-       (goto (label there))
-       there)))
+    `((< ,<) (+ ,+) (- ,-))
+    '((assign retaddr (label fib-end))
+      fib
+      (test (op <) (reg n) (const 2))
+      (branch (label fib-base))
+      (save retaddr)
+      (save n)
+      (assign retaddr (label after-fib-1))
+      (assign n (op -) (reg n) (const 1))
+      (goto (label fib))
 
-(start test)
-(get-register-contents test 'a)
+      after-fib-1
+      (restore n)
+      ;(restore retaddr) <= retaddr can never change in between. The benefit of pushing the value after the continuation (we can access value w/o going through)
+      (assign n (op -) (reg n) (const 2))
+      ;(save retaddr) <= retaddr thrown away on the next line, so not used
+      (assign retaddr (label afterfib-n-2))
+      (save retval)
+      (goto (label fib))
 
-(provide make-machine)
-(provide set-register-contents!)
-(provide start)
-(provide get-register-contents)
+      afterfib-n-2
+      (assign n (reg retval))
+      (restore retval)
+      (restore retaddr)
+      (assign retval
+              (op +) (reg retval) (reg n))
+      (goto (reg retaddr))
+
+      fib-base
+      (assign retval (reg n))
+      (goto (reg retaddr))
+
+      fib-end)))
+
+(set-register-contents! fib-rec 'n 5)
+(start fib-rec)
+(get-register-contents fib-rec 'retval)

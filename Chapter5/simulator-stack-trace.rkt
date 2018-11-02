@@ -1,8 +1,5 @@
 #lang racket
 
-;; 'a will take the value of 3 when getting to there
-;; because we build up an association list in order of the text
-
 ;; Machine-level procedures
 (define (make-machine register-names ops controller-text)
   (let ((machine (make-new-machine)))
@@ -42,21 +39,36 @@
 
 ;; Stack procedures
 (define (make-stack)
-  (let ((s '()))
+  (let ((s '())
+	(number-pushes 0)
+	(max-depth 0)
+	(current-depth 0))
     (define (push x)
-      (set! s (cons x s)))
+      (set! s (cons x s))
+      (set! number-pushes (+ number-pushes 1))
+      (set! current-depth (+ current-depth 1))
+      (set! max-depth (max current-depth max-depth)))
     (define (pop)
       (if (null? s)
           (error "Empty stack -- POP")
           (let ((top (car s)))
             (set! s (cdr s))
+	    (set! current-depth (- current-depth 1))
             top)))
     (define (initialize)
-      (set! s '()))
+      (set! s '())
+      (set! number-pushes 0)
+      (set! max-depth 0)
+      (set! current-depth 0))
+    (define (print-statistics)
+      (newline)
+      (display (list 'total-pushes number-pushes
+		     'maximum-depth max-depth)))
     (define (dispatch message)
       (cond ((eq? message 'push) push)
             ((eq? message 'pop) (pop))
             ((eq? message 'initialize) (initialize))
+	    ((eq? message 'print-statistics) (print-statistics))
             (else (error "Unknown request -- STACK" message))))
     dispatch))
 
@@ -80,7 +92,9 @@
         (the-instruction-sequence '()))
     (let ((the-ops
            (mlist (mlist 'initialize-stack
-                         (lambda () (stack 'initialize)))))
+                         (lambda () (stack 'initialize)))
+		  (mlist 'print-stack-statistics
+			 (lambda () (stack 'print-statistics)))))
           (register-table (mlist (mlist 'pc pc) (mlist 'flag flag))))
       (define (allocate-register name)
         (if (massoc name register-table)
@@ -106,9 +120,7 @@
                (set-contents! pc the-instruction-sequence)
                (execute))
               ((eq? message 'install-instruction-sequence)
-               (lambda (seq) (set! the-instruction-sequence seq)
-                 (display seq)
-                 (newline)))
+               (lambda (seq) (set! the-instruction-sequence seq)))
               ((eq? message 'allocate-register) allocate-register)
               ((eq? message 'get-register) lookup-register)
               ((eq? message 'install-operations)
@@ -145,12 +157,10 @@
                       (lambda (insts labels)
                         (let ((next-inst (mcar text)))
                           (if (symbol? next-inst)
-                              (if (massoc next-inst labels)
-                                  (error "Duplicate label encountered -- EXTRACT-LABELS" next-inst)
-                                  (receive insts
-                                           (mcons (make-label-entry next-inst
-                                                                    insts)
-                                                  labels)))
+                              (receive insts
+                                       (mcons (make-label-entry next-inst
+                                                                insts)
+                                             labels))
                               (receive (mcons (make-instruction next-inst)
                                              insts)
                                        labels)))))))
@@ -401,23 +411,6 @@
 
 (define (mlist . vals)
   (foldr mcons '() vals))
-
-(define test
-  (make-machine
-   '(a)
-   '()
-   '(start
-      (goto (label here))
-     here
-       (assign a (const 3))
-       (goto (label there))
-     here
-       (assign a (const 4))
-       (goto (label there))
-       there)))
-
-(start test)
-(get-register-contents test 'a)
 
 (provide make-machine)
 (provide set-register-contents!)

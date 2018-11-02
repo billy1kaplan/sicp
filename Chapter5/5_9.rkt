@@ -1,8 +1,5 @@
 #lang racket
 
-;; 'a will take the value of 3 when getting to there
-;; because we build up an association list in order of the text
-
 ;; Machine-level procedures
 (define (make-machine register-names ops controller-text)
   (let ((machine (make-new-machine)))
@@ -106,9 +103,7 @@
                (set-contents! pc the-instruction-sequence)
                (execute))
               ((eq? message 'install-instruction-sequence)
-               (lambda (seq) (set! the-instruction-sequence seq)
-                 (display seq)
-                 (newline)))
+               (lambda (seq) (set! the-instruction-sequence seq)))
               ((eq? message 'allocate-register) allocate-register)
               ((eq? message 'get-register) lookup-register)
               ((eq? message 'install-operations)
@@ -145,12 +140,10 @@
                       (lambda (insts labels)
                         (let ((next-inst (mcar text)))
                           (if (symbol? next-inst)
-                              (if (massoc next-inst labels)
-                                  (error "Duplicate label encountered -- EXTRACT-LABELS" next-inst)
-                                  (receive insts
-                                           (mcons (make-label-entry next-inst
-                                                                    insts)
-                                                  labels)))
+                              (receive insts
+                                       (mcons (make-label-entry next-inst
+                                                                insts)
+                                             labels))
                               (receive (mcons (make-instruction next-inst)
                                              insts)
                                        labels)))))))
@@ -372,7 +365,9 @@
   (let ((op (lookup-prim (operation-exp-op exp) operations))
         (aprocs
          (mmap (lambda (e)
-                 (make-primitive-exp e machine labels))
+		 (if (label-exp? e)
+		     (error "Cannot perform operation on label" e)
+		     (make-primitive-exp e machine labels)))
                (operation-exp-operands exp))))
     (lambda ()
       (apply op (make-immutable (mmap (lambda (p) (p)) aprocs))))))
@@ -402,22 +397,16 @@
 (define (mlist . vals)
   (foldr mcons '() vals))
 
-(define test
+;; Testing:
+(define bad-machine
   (make-machine
    '(a)
-   '()
-   '(start
-      (goto (label here))
-     here
-       (assign a (const 3))
-       (goto (label there))
-     here
-       (assign a (const 4))
-       (goto (label there))
-       there)))
+   '((+ ,+))
+   '((assign a (op +) (const 1) (label end))
+     end)))
 
-(start test)
-(get-register-contents test 'a)
+(start bad-machine)
+(get-contents bad-machine 'a)
 
 (provide make-machine)
 (provide set-register-contents!)

@@ -1,8 +1,5 @@
 #lang racket
 
-;; 'a will take the value of 3 when getting to there
-;; because we build up an association list in order of the text
-
 ;; Machine-level procedures
 (define (make-machine register-names ops controller-text)
   (let ((machine (make-new-machine)))
@@ -77,6 +74,7 @@
   (let ((pc (make-register 'pc))
         (flag (make-register 'flag))
         (stack (make-stack))
+        (count 0)
         (the-instruction-sequence '()))
     (let ((the-ops
            (mlist (mlist 'initialize-stack
@@ -94,27 +92,33 @@
           (if val
               (mcadr val)
               (error "Unknown register: " name))))
+      (define (display-count)
+        (display "Current instruction count: ") (display count)
+        (newline))
       (define (execute)
         (let ((insts (get-contents pc)))
           (if (null? insts)
               'done
               (begin
                 ((instruction-execution-proc (mcar insts)))
+                (set! count (+ count 1))
                 (execute)))))
+      (define (reset)
+        (set! count 0))
       (define (dispatch message)
         (cond ((eq? message 'start)
                (set-contents! pc the-instruction-sequence)
                (execute))
               ((eq? message 'install-instruction-sequence)
-               (lambda (seq) (set! the-instruction-sequence seq)
-                 (display seq)
-                 (newline)))
+               (lambda (seq) (set! the-instruction-sequence seq)))
               ((eq? message 'allocate-register) allocate-register)
               ((eq? message 'get-register) lookup-register)
               ((eq? message 'install-operations)
                (lambda (ops) (set! the-ops (mappend the-ops ops))))
               ((eq? message 'stack) stack)
               ((eq? message 'operations) the-ops)
+              ((eq? message 'reset) (reset))
+              ((eq? message 'count) (display-count))
               (else (error "Unknown request -- MACHINE" message))))
       dispatch)))
 
@@ -145,12 +149,10 @@
                       (lambda (insts labels)
                         (let ((next-inst (mcar text)))
                           (if (symbol? next-inst)
-                              (if (massoc next-inst labels)
-                                  (error "Duplicate label encountered -- EXTRACT-LABELS" next-inst)
-                                  (receive insts
-                                           (mcons (make-label-entry next-inst
-                                                                    insts)
-                                                  labels)))
+                              (receive insts
+                                       (mcons (make-label-entry next-inst
+                                                                insts)
+                                             labels))
                               (receive (mcons (make-instruction next-inst)
                                              insts)
                                        labels)))))))
@@ -402,24 +404,30 @@
 (define (mlist . vals)
   (foldr mcons '() vals))
 
-(define test
+;; Test:
+(define factorial-machine
   (make-machine
-   '(a)
-   '()
-   '(start
-      (goto (label here))
-     here
-       (assign a (const 3))
-       (goto (label there))
-     here
-       (assign a (const 4))
-       (goto (label there))
-       there)))
+   '(a b c t)
+   (list (list '> >) (list '* *) (list '+ +))
+   '((assign b (const 1))
+     (assign c (const 1))
+     test-b
+     (test (op >) (reg c) (reg a))
+     (branch (label gcd-done))
+     (assign t (op *) (reg b) (reg c))
+     (assign b (reg t))
+     (assign t (op +) (reg c) (const 1))
+     (assign c (reg t))
+     (goto (label test-b))
+     gcd-done
+     (assign a (reg b)))))
 
-(start test)
-(get-register-contents test 'a)
-
-(provide make-machine)
-(provide set-register-contents!)
-(provide start)
-(provide get-register-contents)
+(set-register-contents! factorial-machine 'a 3)
+(start factorial-machine)
+(get-register-contents factorial-machine 'a) ;; Factorial of 3 => 6
+(factorial-machine 'count)
+(factorial-machine 'reset)
+(factorial-machine 'count)
+(start factorial-machine)
+(get-register-contents factorial-machine 'a) ;; Factorial of 6 => 720
+(factorial-machine 'count)
