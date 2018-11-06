@@ -314,7 +314,7 @@
             (advance-pc pc)))
         (error "Bad PERFORM instruction -- ASSEMBLE" inst))))
 
-(define (perform-action inst) (cdr inst))
+(define (perform-action inst) (mcdr inst))
 
 ;; Subexpressions
 (define (make-primitive-exp exp machine labels)
@@ -399,3 +399,4 @@
 (provide set-register-contents!)
 (provide start)
 (provide get-register-contents)
+
