@@ -1,6 +1,6 @@
 #lang racket
 
-(require "simulator.rkt")
+(require "simulator-stack-trace.rkt")
 
 ;; "Primitives"
 (define (empty-arglist) '())
@@ -302,7 +302,7 @@
                                          (primitive-procedure-objects))))
 
 ;; Evaluator
-(define evaluator
+(define (evaluator)
   (make-machine
    '(exp env val continue proc arg1 unev)
    `((empty-arglist ,empty-arglist) (adjoin-arg ,adjoin-arg) (last-operand? ,last-operand?)
@@ -544,4 +544,32 @@
 
      eval-done)))
 
-(provide evaluator)
+(define (factorial n) (append '(begin
+                                 (define iter (lambda (product counter n)
+                                                (if (> counter n)
+                                                    product
+                                                    (iter (* counter product)
+                                                          (+ counter 1)
+                                                          n))))
+                                             (define factorial (lambda (n)
+                                                                 (iter 1 1 n))))    
+                              (list (list 'factorial n))))
+                     
+
+(define (run-factorial-with-stats n)
+  (let ((evaluator (evaluator)))
+    (set-register-contents! evaluator 'exp (factorial n))
+    (set-register-contents! evaluator 'env (get-global-environment))
+    (start evaluator)
+    (newline)
+    (display "Results: ") (display (get-register-contents evaluator 'val))
+    (print-stats evaluator)))
+
+(run-factorial-with-stats 1)
+(run-factorial-with-stats 2)
+(run-factorial-with-stats 3)
+(run-factorial-with-stats 4)
+(run-factorial-with-stats 9)
+
+;; a). The maximum stack depth is: 10
+;; b). Total push operations: T(n) = 38n + 38 for n >= 1

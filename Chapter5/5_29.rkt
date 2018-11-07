@@ -1,6 +1,6 @@
 #lang racket
 
-(require "simulator.rkt")
+(require "simulator-stack-trace.rkt")
 
 ;; "Primitives"
 (define (empty-arglist) '())
@@ -84,6 +84,7 @@
   (tagged-list? exp 'begin))
 (define (begin-actions exp) (cdr exp))
 (define (last-exp? seq) (null? (cdr seq)))
+(define (no-more-exps? seq) (null? seq))
 (define (first-exp seq) (car seq))
 (define (rest-exps seq) (cdr seq))
 (define (sequence->exp seq)
@@ -302,7 +303,7 @@
                                          (primitive-procedure-objects))))
 
 ;; Evaluator
-(define evaluator
+(define (evaluator)
   (make-machine
    '(exp env val continue proc arg1 unev)
    `((empty-arglist ,empty-arglist) (adjoin-arg ,adjoin-arg) (last-operand? ,last-operand?)
@@ -321,6 +322,7 @@
                                     (extend-environment ,extend-environment)
                                     (procedure-body ,procedure-body)
                                     (begin-actions ,begin-actions)
+                                    (no-more-exps? ,no-more-exps?) 
                                     (first-exp ,first-exp)
                                     (last-exp? ,last-exp?)
                                     (rest-exps ,rest-exps)
@@ -452,13 +454,10 @@
      (save continue)
      (goto (label ev-sequence))
 
-     ;; A simple tail recursion implementation
-     ;; Allows us to use constant space rather than space proportional to the number of recursive calls when our procedure is in the tail position!
-
      ev-sequence
+     (test (op no-more-exps?) (reg unev))
+     (branch (label ev-sequence-end)) 
      (assign exp (op first-exp) (reg unev))
-     (test (op last-exp?) (reg unev))
-     (branch (label ev-sequence-last-exp)) ;; Doing this branch is enough to implement tail recursion! We don't add to the stack 
      (save unev)
      (save env)
      (assign continue (label ev-sequence-continue))
@@ -470,9 +469,9 @@
      (assign unev (op rest-exps) (reg unev))
      (goto (label ev-sequence))
 	  
-     ev-sequence-last-exp
+     ev-sequence-end
      (restore continue)
-     (goto (label eval-dispatch))
+     (goto (reg continue))
 
      ev-if
      (save exp)
@@ -544,4 +543,34 @@
 
      eval-done)))
 
-(provide evaluator)
+(define (fib n) (append '(begin
+                           (define fib (lambda (n)
+                                         (if (< n 2)
+                                             n
+                                             (+ (fib (- n 1))
+                                                (fib (- n 2)))))))
+                        (list (list 'fib n))))
+                     
+
+(define (run-factorial-with-stats n)
+  (let ((evaluator (evaluator)))
+    (set-register-contents! evaluator 'exp (fib n))
+    (set-register-contents! evaluator 'env (get-global-environment))
+    (start evaluator)
+    (newline)
+    (display "Results: ") (display (get-register-contents evaluator 'val))
+    (print-stats evaluator)))
+
+(run-factorial-with-stats 1)
+(run-factorial-with-stats 2)
+(run-factorial-with-stats 3)
+(run-factorial-with-stats 4)
+(run-factorial-with-stats 9)
+
+;; Factorial:
+;; Stack Depth(n) = 8n + 6
+;; Stack Pushes:
+;; S(n) = S(n-1) + S(n-2) + k
+;;      = S(n-1) + S(n-2) + 34
+;; S(n) = aFib(n+1) + b
+;;      = 60Fib(n+1) - 34

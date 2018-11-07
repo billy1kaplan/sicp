@@ -301,6 +301,8 @@
 (define primitive-env (mlist (make-frame (primitive-procedure-names)
                                          (primitive-procedure-objects))))
 
+
+
 ;; Evaluator
 (define evaluator
   (make-machine
@@ -324,6 +326,11 @@
                                     (first-exp ,first-exp)
                                     (last-exp? ,last-exp?)
                                     (rest-exps ,rest-exps)
+                                    (cond? ,cond?)
+                                    (cond-predicatet ,cond-predicate)
+                                    (cond-clauses ,cond-clauses)
+                                    (cond-actions ,cond-actions)
+                                    (cond->if ,cond->if)
                                     (if-predicate ,if-predicate)
                                     (if-consequent ,if-consequent)
                                     (if-alternative ,if-alternative)
@@ -339,7 +346,9 @@
                                     (get-global-environment ,get-global-environment)
                                     (announce-output ,announce-output)
                                     (user-print ,user-print)
-                                    (display ,display))
+                                    (display ,display)
+                                    (let? ,let?)
+                                    (let->combination ,let->combination))
    '((assign continue (label eval-done))
      eval-dispatch
      (test (op self-evaluating?) (reg exp))
@@ -352,12 +361,16 @@
      (branch (label ev-assignment))
      (test (op definition?) (reg exp))
      (branch (label ev-definition))
+     (test (op cond?) (reg exp))
+     (branch (label ev-cond))
      (test (op if?) (reg exp))
      (branch (label ev-if))
      (test (op lambda?) (reg exp))
      (branch (label ev-lambda))
      (test (op begin?) (reg exp))
      (branch (label ev-begin))
+     (test (op let?) (reg exp))
+     (branch (label ev-let))
      (test (op application?) (reg exp))
      (branch (label ev-application))
      (goto (label unknown-expression-type))
@@ -380,6 +393,10 @@
      (assign val (op make-procedure)
              (reg unev) (reg exp) (reg env))
      (goto (reg continue))
+
+     ev-let
+     (assign exp (op let->combination) (reg exp))
+     (goto (label ev-application))
 
      ev-application
      (save continue)
@@ -474,6 +491,10 @@
      (restore continue)
      (goto (label eval-dispatch))
 
+     ev-cond
+     (assign exp (op cond->if) (reg exp))
+     (goto (label ev-if))
+
      ev-if
      (save exp)
      (save env)
@@ -544,4 +565,31 @@
 
      eval-done)))
 
-(provide evaluator)
+;; Test for cond
+(define test '(begin
+                (define assert (lambda (expected actual)
+                                 (if (equal? expected actual)
+                                     (display ".")
+                                     (begin (display "Failed: ")
+                                            (display expected)
+                                            (display " : ")
+                                            (display actual)
+                                            (newline)))))
+                (define cond-test (lambda (x)
+                                    (cond ((= x 0) 'a)
+                                          ((= x 1) 'b)
+                                          (else 'c))) 4)
+                (assert 'b (cond-test 1))
+                (assert 'a (cond-test 0))
+                (assert 'c (cond-test 60))
+
+                (define let-test (let ((y 1)
+                                       (z 2))
+                                   (+ y z)))
+                (assert 3 let-test)
+                (newline)))
+
+(set-register-contents! evaluator 'exp test)
+(set-register-contents! evaluator 'env (get-global-environment))
+(start evaluator)
+(get-register-contents evaluator 'val)

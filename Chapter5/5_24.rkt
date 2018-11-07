@@ -2,6 +2,8 @@
 
 (require "simulator.rkt")
 
+;; rekt by mutable lists, this one doesn't work
+
 ;; "Primitives"
 (define (empty-arglist) '())
 (define (adjoin-arg arg arglist)
@@ -100,23 +102,6 @@
   (eq? (cond-predicate clause) 'else))
 (define (cond-predicate clause) (car clause))
 (define (cond-actions clause) (cdr clause))
-
-(define (cond->if exp)
-  (expand-clauses (cond-clauses exp)))
-
-(define (expand-clauses clauses)
-  (if (null? clauses)
-      'false
-      (let ((first (car clauses))
-            (rest (cdr clauses)))
-        (if (cond-else-clause? first)
-            (if (null? rest)
-                (sequence->exp (cond-actions first))
-                (error "ELSE clause isn't last -- COND->IF"
-                       clauses))
-            (make-if (cond-predicate first)
-                     (sequence->exp (cond-actions first))
-                     (expand-clauses rest))))))
 
 (define (application? exp)
   (pair? exp))
@@ -324,6 +309,11 @@
                                     (first-exp ,first-exp)
                                     (last-exp? ,last-exp?)
                                     (rest-exps ,rest-exps)
+                                    (cond? ,cond?)
+                                    (cond-predicate ,cond-predicate)
+                                    (cond-clauses ,cond-clauses)
+                                    (cond-actions ,cond-actions)
+                                    (cond-else-clause? ,cond-else-clause?)
                                     (if-predicate ,if-predicate)
                                     (if-consequent ,if-consequent)
                                     (if-alternative ,if-alternative)
@@ -339,7 +329,9 @@
                                     (get-global-environment ,get-global-environment)
                                     (announce-output ,announce-output)
                                     (user-print ,user-print)
-                                    (display ,display))
+                                    (display ,display)
+                                    (let? ,let?)
+                                    (let->combination ,let->combination))
    '((assign continue (label eval-done))
      eval-dispatch
      (test (op self-evaluating?) (reg exp))
@@ -352,12 +344,16 @@
      (branch (label ev-assignment))
      (test (op definition?) (reg exp))
      (branch (label ev-definition))
+     (test (op cond?) (reg exp))
+     (branch (label ev-cond))
      (test (op if?) (reg exp))
      (branch (label ev-if))
      (test (op lambda?) (reg exp))
      (branch (label ev-lambda))
      (test (op begin?) (reg exp))
      (branch (label ev-begin))
+     (test (op let?) (reg exp))
+     (branch (label ev-let))
      (test (op application?) (reg exp))
      (branch (label ev-application))
      (goto (label unknown-expression-type))
@@ -380,6 +376,10 @@
      (assign val (op make-procedure)
              (reg unev) (reg exp) (reg env))
      (goto (reg continue))
+
+     ev-let
+     (assign exp (op let->combination) (reg exp))
+     (goto (label ev-application))
 
      ev-application
      (save continue)
@@ -474,6 +474,36 @@
      (restore continue)
      (goto (label eval-dispatch))
 
+     ev-cond
+     (assign unev (op cond-clauses) (reg exp))
+     (goto (label ev-loop))
+
+     ev-loop
+     (assign exp (op first-exp) (reg unev))
+     (test (op cond-else-clause?) (reg exp))
+     (branch (label ev-cond-action))
+     (save exp)
+     (save env)
+     (save unev)
+     (save continue)
+     (assign exp (op cond-predicate) (reg exp))
+     (goto (label eval-dispatch))
+
+     ev-decide
+     (restore continue)
+     (restore unev)
+     (restore env)
+     (restore exp)
+     (test (op true?) (reg val))
+     (branch (label ev-cond-action))
+     (assign unev (op rest-exps) (reg unev))
+     (goto (label ev-loop))
+
+     ev-cond-action
+     (assign unev (op cond-actions) (reg exp))
+     (save continue)
+     (goto (label ev-sequence))
+     
      ev-if
      (save exp)
      (save env)
@@ -544,4 +574,27 @@
 
      eval-done)))
 
-(provide evaluator)
+;; Test for cond
+(define test '(begin
+                (define assert (lambda (expected actual)
+                                 (if (equal? expected actual)
+                                     (display ".")
+                                     (begin (display "Failed: ")
+                                            (display expected)
+                                            (display " : ")
+                                            (display actual)
+                                            (newline)))))
+                (define cond-test (lambda (x)
+                                    (cond ((= x 0) 'a)
+                                          ((= x 1) 'b)
+                                          (else 'c))) 4)
+                (assert 'b (cond-test 1))
+                (assert 'a (cond-test 0))
+                (assert 'c (cond-test 60))
+                
+                (newline)))
+
+(set-register-contents! evaluator 'exp test)
+(set-register-contents! evaluator 'env (get-global-environment))
+(start evaluator)
+(get-register-contents evaluator 'val)

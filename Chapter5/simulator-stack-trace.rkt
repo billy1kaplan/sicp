@@ -127,6 +127,7 @@
                (lambda (ops) (set! the-ops (mappend the-ops ops))))
               ((eq? message 'stack) stack)
               ((eq? message 'operations) the-ops)
+			  ((eq? message 'print-stats) (stack 'print-statistics))
               (else (error "Unknown request -- MACHINE" message))))
       dispatch)))
 
@@ -331,7 +332,7 @@
             (advance-pc pc)))
         (error "Bad PERFORM instruction -- ASSEMBLE" inst))))
 
-(define (perform-action inst) (cdr inst))
+(define (perform-action inst) (mcdr inst))
 
 ;; Subexpressions
 (define (make-primitive-exp exp machine labels)
@@ -412,7 +413,11 @@
 (define (mlist . vals)
   (foldr mcons '() vals))
 
+(define (print-stats machine)
+  (machine 'print-stats))
+
 (provide make-machine)
 (provide set-register-contents!)
 (provide start)
 (provide get-register-contents)
+(provide print-stats)

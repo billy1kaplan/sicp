@@ -1,6 +1,6 @@
 #lang racket
 
-(require "simulator.rkt")
+(require "simulator-stack-trace.rkt")
 
 ;; "Primitives"
 (define (empty-arglist) '())
@@ -302,7 +302,7 @@
                                          (primitive-procedure-objects))))
 
 ;; Evaluator
-(define evaluator
+(define (evaluator)
   (make-machine
    '(exp env val continue proc arg1 unev)
    `((empty-arglist ,empty-arglist) (adjoin-arg ,adjoin-arg) (last-operand? ,last-operand?)
@@ -544,4 +544,31 @@
 
      eval-done)))
 
-(provide evaluator)
+(define (factorial n) (append '(begin
+                                 (define factorial (lambda (n)
+                                                     (if (= n 1)
+                                                         1
+                                                         (* n
+                                                            (factorial (- n 1)))))))
+                              (list (list 'factorial n))))
+                     
+
+(define (run-factorial-with-stats n)
+  (let ((evaluator (evaluator)))
+    (set-register-contents! evaluator 'exp (factorial n))
+    (set-register-contents! evaluator 'env (get-global-environment))
+    (start evaluator)
+    (newline)
+    (display "Results: ") (display (get-register-contents evaluator 'val))
+    (print-stats evaluator)))
+
+(run-factorial-with-stats 1)
+(run-factorial-with-stats 2)
+(run-factorial-with-stats 3)
+(run-factorial-with-stats 4)
+(run-factorial-with-stats 9)
+
+;; Comparing iterative factorial vs. recursive factorial:
+;;                        Max Depth  |   Number of pushes
+;; Recursive Factorial     3n + 5           32n - 10
+;; Iterative Factorial       10             38n + 38
