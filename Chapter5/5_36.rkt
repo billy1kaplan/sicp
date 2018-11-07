@@ -438,6 +438,7 @@
       (make-instruction-sequence '(env proc arg1) '(env)
                                  `(,proc-entry
                                     (assign env (op compiled-procedure-env) (reg proc))
+                                    (assign arg1 (op reverse) (reg arg1))
                                     (assign env
                                             (op extend-environment)
                                             (const ,formals)
@@ -457,21 +458,20 @@
                             (compile-procedure-call target linkage)))))
 
 (define (construct-arglist operand-codes)
-  (let ((operand-codes (reverse operand-codes)))
-    (if (null? operand-codes)
-        (make-instruction-sequence '() '(arg1)
-                                   `((assign arg1 (const ()))))
-        (let ((code-to-get-last-arg
-                (append-instruction-sequences
-                  (car operand-codes)
-                  (make-instruction-sequence '(val) '(arg1)
-                                             '((assign arg1 (op list) (reg val)))))))
-          (if (null? (cdr operand-codes))
-              code-to-get-last-arg
-              (preserving '(env)
-                          code-to-get-last-arg
-                          (code-to-get-rest-args
-                            (cdr operand-codes))))))))
+  (if (null? operand-codes)
+      (make-instruction-sequence '() '(arg1)
+                                 `((assign arg1 (const ()))))
+      (let ((code-to-get-last-arg
+             (append-instruction-sequences
+              (car operand-codes)
+              (make-instruction-sequence '(val) '(arg1)
+                                         '((assign arg1 (op list) (reg val)))))))
+        (if (null? (cdr operand-codes))
+            code-to-get-last-arg
+            (preserving '(env)
+                        code-to-get-last-arg
+                        (code-to-get-rest-args
+                         (cdr operand-codes)))))))
 
 (define (code-to-get-rest-args operand-codes)
   (let ((code-for-next-arg 
@@ -589,3 +589,7 @@
 (provide primitive-env)
 (provide statements)
 (provide set-label-start!)
+
+
+;; A combination has its operands evaluated from right-to-left.
+;; This will negatively impact the compiler because we need to save the reverse (to fix the arg list) until runtime.

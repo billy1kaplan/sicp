@@ -84,7 +84,6 @@
   (tagged-list? exp 'begin))
 (define (begin-actions exp) (cdr exp))
 (define (last-exp? seq) (null? (cdr seq)))
-(define (no-more-exps? seq) (null? seq))
 (define (first-exp seq) (car seq))
 (define (rest-exps seq) (cdr seq))
 (define (sequence->exp seq)
@@ -322,7 +321,6 @@
                                     (extend-environment ,extend-environment)
                                     (procedure-body ,procedure-body)
                                     (begin-actions ,begin-actions)
-                                    (no-more-exps? ,no-more-exps?) 
                                     (first-exp ,first-exp)
                                     (last-exp? ,last-exp?)
                                     (rest-exps ,rest-exps)
@@ -341,7 +339,8 @@
                                     (get-global-environment ,get-global-environment)
                                     (announce-output ,announce-output)
                                     (user-print ,user-print)
-                                    (display ,display))
+                                    (display ,display)
+                                    (symbol? ,symbol?))
    '((assign continue (label eval-done))
      eval-dispatch
      (test (op self-evaluating?) (reg exp))
@@ -385,16 +384,23 @@
 
      ev-application
      (save continue)
-     (save env)
      (assign unev (op operands) (reg exp))
-     (save unev)
      (assign exp (op operator) (reg exp))
+     (test (op symbol?) (reg exp))
+     (save unev)
+     (branch (label ev-appl-symbol-operator))
+     (save env)
      (assign continue (label ev-appl-did-operator))
      (goto (label eval-dispatch))
 
+     ev-appl-symbol-operator
+     (assign continue (label ev-appl-did-symbol-operator))
+     (goto (label eval-dispatch))
+
      ev-appl-did-operator
-     (restore unev)
      (restore env)
+     ev-appl-did-symbol-operator
+     (restore unev)
      (assign arg1 (op empty-arglist))
      (assign proc (reg val))
      (test (op no-operands?) (reg unev))
@@ -454,10 +460,13 @@
      (save continue)
      (goto (label ev-sequence))
 
+     ;; A simple tail recursion implementation
+     ;; Allows us to use constant space rather than space proportional to the number of recursive calls when our procedure is in the tail position!
+
      ev-sequence
-     (test (op no-more-exps?) (reg unev))
-     (branch (label ev-sequence-end)) 
      (assign exp (op first-exp) (reg unev))
+     (test (op last-exp?) (reg unev))
+     (branch (label ev-sequence-last-exp)) ;; Doing this branch is enough to implement tail recursion! We don't add to the stack 
      (save unev)
      (save env)
      (assign continue (label ev-sequence-continue))
@@ -469,9 +478,9 @@
      (assign unev (op rest-exps) (reg unev))
      (goto (label ev-sequence))
 	  
-     ev-sequence-end
+     ev-sequence-last-exp
      (restore continue)
-     (goto (reg continue))
+     (goto (label eval-dispatch))
 
      ev-if
      (save exp)
@@ -543,37 +552,30 @@
 
      eval-done)))
 
-(define (factorial n) `(begin
-                         (define iter (lambda (product counter n)
-                                        (if (> counter n)
-                                            product
-                                            (iter (* counter product)
-                                                  (+ counter 1)
-                                                  n))))
-                         (define factorial (lambda (n)
-                                             (iter 1 1 n)))    
-                         (factorial ,n)))
-                     
+(provide evaluator)
 
-(define (run-factorial-with-stats n)
+;; Test for part A
+(define symbol-app '(+ 1 1))
+
+(define f-app '(((lambda () +)) 1 1))
+
+(define (run-test-with-stats prog)
   (let ((evaluator (evaluator)))
-    (set-register-contents! evaluator 'exp (factorial n))
+    (set-register-contents! evaluator 'exp prog)
     (set-register-contents! evaluator 'env (get-global-environment))
     (start evaluator)
     (newline)
     (display "Results: ") (display (get-register-contents evaluator 'val))
     (print-stats evaluator)))
 
-(run-factorial-with-stats 1)
-(run-factorial-with-stats 2)
-(run-factorial-with-stats 3)
-(run-factorial-with-stats 4)
-(run-factorial-with-stats 9)
+(run-test-with-stats symbol-app)
+(run-test-with-stats f-app)
 
-
-;; Comparing iterative factorial vs. recursive factorial:
-;;                        Max Depth  |   Number of pushes
-;; Recursive Factorial     3n + 5           32n - 10
-;; Iterative Factorial       10             38n + 38
-;; Iterative Factorial     3n + 17          40n + 44 <- grows linearly with n (like the recursive factorial)
-;; (w/o Tail Call opt.)
+;; Part B
+;; By extending the evaluator to handle more and more cases.
+;; We may be able to achieve some efficiency gains by replacing expensive
+;; operations (such as on the stack) with cheaper operations in the interpreter.
+;; However, the compiler will make a better optimization. By moving operations
+;; from runtime to compile time, we gain performance without making runtime tradeoffs.
+;; Also, we need to take apart expressions multiple times to figure out what to do with them
+;; whereas the compiler will only do this once which is far more efficient.
