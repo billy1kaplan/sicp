@@ -42,7 +42,7 @@
                   ((great grandson) ?g ?ggs)
                   ((great great grandson) ?g ?gggs)
 
-                  ;(?relationship Adam Irad) ;; This query causes an infinite loop
+                  (?relationship Adam Irad) ;; This query causes an infinite loop. We unify with our (great . ?rel) rule, but this continues forever
                   ((great grandson) Adam ?ggs)
                   )) 
 
